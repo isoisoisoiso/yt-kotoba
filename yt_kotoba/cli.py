@@ -27,7 +27,13 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"[yt-kotoba] video_id = {video_id}")
 
     print("[1/3] downloading audio...")
-    audio_path = download_audio(args.url, out_dir, audio_format=args.audio_format)
+    audio_path = download_audio(
+        args.url,
+        out_dir,
+        audio_format=args.audio_format,
+        cookies_browser=args.cookies_browser,
+        cookies_file=args.cookies_file,
+    )
     print(f"      -> {audio_path.name}")
 
     print("[2/3] transcribing (this may take a while on first run)...")
@@ -49,7 +55,13 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_download(args: argparse.Namespace) -> int:
-    out = download_audio(args.url, Path(args.out), args.audio_format)
+    out = download_audio(
+        args.url,
+        Path(args.out),
+        args.audio_format,
+        cookies_browser=args.cookies_browser,
+        cookies_file=args.cookies_file,
+    )
     print(out)
     return 0
 
@@ -84,17 +96,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
+    cookies_help_browser = (
+        "Extract cookies from this browser (chrome/edge/firefox/brave/...). "
+        "Required for many YouTube videos due to anti-bot measures. "
+        "Close the browser first to release the cookie DB lock."
+    )
+    cookies_help_file = "Path to a Netscape-format cookies.txt file (alternative)."
+
     p_run = sub.add_parser("run", help="End-to-end: URL -> packed.md")
     p_run.add_argument("url", help="YouTube URL or 11-char video ID")
     p_run.add_argument("--out", default="./output", help="Output directory")
     p_run.add_argument("--lang", default="ja", help="Transcription language (default: ja)")
     p_run.add_argument("--audio-format", default="m4a", help="Audio format")
+    p_run.add_argument("--cookies-browser", help=cookies_help_browser)
+    p_run.add_argument("--cookies-file", help=cookies_help_file)
     p_run.set_defaults(func=cmd_run)
 
     p_dl = sub.add_parser("download", help="Download audio only")
     p_dl.add_argument("url")
     p_dl.add_argument("--out", default="./output")
     p_dl.add_argument("--audio-format", default="m4a")
+    p_dl.add_argument("--cookies-browser", help=cookies_help_browser)
+    p_dl.add_argument("--cookies-file", help=cookies_help_file)
     p_dl.set_defaults(func=cmd_download)
 
     p_tr = sub.add_parser("transcribe", help="Transcribe an existing audio file")

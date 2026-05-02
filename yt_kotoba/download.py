@@ -38,8 +38,17 @@ def download_audio(
     url_or_id: str,
     out_dir: Path,
     audio_format: str = "m4a",
+    cookies_browser: str | None = None,
+    cookies_file: str | None = None,
 ) -> Path:
-    """Download audio. Returns Path to the audio file. Skips if already cached."""
+    """Download audio. Returns Path to the audio file. Skips if already cached.
+
+    YouTube has tightened anti-bot measures (PO Token / "Sign in to confirm
+    you're not a bot"). For most videos you'll need to pass cookies. Easiest:
+    `cookies_browser="chrome"` (close the browser first so its DB isn't locked)
+    or `cookies_browser="firefox"`. For headless environments, export cookies
+    to a Netscape-format file and pass `cookies_file`.
+    """
     video_id = extract_video_id(url_or_id)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{video_id}.audio.{audio_format}"
@@ -55,8 +64,12 @@ def download_audio(
         "--quiet",
         "--no-warnings",
         "-o", str(out_dir / f"{video_id}.audio.%(ext)s"),
-        f"https://www.youtube.com/watch?v={video_id}",
     ]
+    if cookies_browser:
+        cmd += ["--cookies-from-browser", cookies_browser]
+    elif cookies_file:
+        cmd += ["--cookies", cookies_file]
+    cmd.append(f"https://www.youtube.com/watch?v={video_id}")
 
     try:
         subprocess.run(cmd, check=True)
@@ -83,9 +96,25 @@ def main() -> int:
     parser.add_argument("url", help="YouTube URL or 11-char video ID")
     parser.add_argument("--out", default="./output", help="Output directory")
     parser.add_argument("--format", default="m4a", help="Audio format (m4a / mp3)")
+    parser.add_argument(
+        "--cookies-browser",
+        help="Extract cookies from this browser (chrome/edge/firefox/brave/...). "
+             "Required for many YouTube videos due to anti-bot measures. "
+             "Close the browser first to release the cookie DB lock.",
+    )
+    parser.add_argument(
+        "--cookies-file",
+        help="Path to a Netscape-format cookies.txt file (alternative to --cookies-browser).",
+    )
     args = parser.parse_args()
 
-    out_path = download_audio(args.url, Path(args.out), args.format)
+    out_path = download_audio(
+        args.url,
+        Path(args.out),
+        args.format,
+        cookies_browser=args.cookies_browser,
+        cookies_file=args.cookies_file,
+    )
     print(out_path)
     return 0
 

@@ -204,6 +204,7 @@ If the user mentions tone preferences in chat ("もっとカジュアルに" / "
 
 ## Common pitfalls
 
+- **YouTube anti-bot ("Sign in to confirm you're not a bot" / HTTP 403)** — yt-dlp now needs cookies for many videos. Pass `--cookies-browser chrome` (or `edge`/`firefox`/`brave`). The browser must be **closed** first to release its cookie DB lock. For headless environments, export cookies to a Netscape-format `cookies.txt` and use `--cookies-file`.
 - **First run downloads the Whisper model (~3GB)** — warn the user before kicking off, especially on metered connections.
 - **CUDA OOM on small GPUs** — set `WHISPER_COMPUTE_TYPE=int8` in `.env` to halve VRAM.
 - **Long videos (>30 min)** — `<id>.packed.md` grows large; consider passing `--block-chars 600` to `yt-kotoba pack` to make blocks bigger.

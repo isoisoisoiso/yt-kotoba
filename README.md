@@ -77,6 +77,10 @@ Claude Code が自動的に:
 # packed.md まで自動生成（ここで CLI は止まる）
 yt-kotoba run "https://www.youtube.com/watch?v=XXXX" --out ./output
 
+# 多くの動画では YouTube の bot 対策で cookies が必要:
+yt-kotoba run "..." --out ./output --cookies-browser chrome
+# (Chrome / Edge を一度閉じてから実行する。firefox / brave も指定可)
+
 # その後、お好みの LLM に packed.md を流し込む（例: Ollama）:
 cat ./output/XXXX.packed.md | ollama run llama3 \
   "この動画の文字起こしから X スレを 5〜8 ツイートで作って" \
