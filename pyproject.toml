@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yt-kotoba"
+version = "0.1.0"
+description = "Turn YouTube videos into X threads, note articles, and other text content. Local Whisper + Claude. Japanese-first."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "yt-kotoba contributors" }]
+keywords = ["youtube", "whisper", "transcription", "claude", "content", "japanese"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Text Processing :: Linguistic",
+]
+dependencies = [
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Pick one based on your platform.
+cuda = ["faster-whisper>=1.0"]      # NVIDIA GPU on Windows / Linux
+mlx  = ["mlx-whisper>=0.4"]          # Apple Silicon
+dev  = ["ruff>=0.5", "pytest>=8.0"]
+
+[project.scripts]
+yt-kotoba = "yt_kotoba.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yt-kotoba/yt-kotoba"
+Repository = "https://github.com/yt-kotoba/yt-kotoba"
+Issues = "https://github.com/yt-kotoba/yt-kotoba/issues"
+
+[tool.setuptools.packages.find]
+include = ["yt_kotoba*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"

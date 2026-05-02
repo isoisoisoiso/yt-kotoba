@@ -1,0 +1,21 @@
+# Example brand voice config — copy to your output directory and customize.
+# yt-kotoba picks this up automatically when present at <output_dir>/voice.yaml.
+
+# Overall tone / register the AI should use.
+tone: "落ち着いた解説調、専門用語の濫用を避ける"
+
+# Words / phrases the AI must avoid in generated text.
+forbidden_words:
+  - "絶対"
+  - "必ず"
+  - "100%"
+
+# Hashtags to include in the last post of an X thread / Threads thread.
+required_hashtags:
+  - "#YouTube"
+
+# Signature line appended to note articles.
+signature: "── あなたのチャンネル名"
+
+# Target reader profile — informs vocabulary and depth.
+target_audience: "あなたのターゲット読者層を一言で"
