@@ -4,6 +4,8 @@
 
 > ⚠️ **Status: v0.1 (early preview)** — まだフィードバック受付中。名前・スコープが変わる可能性あり。本番運用前に [ROADMAP.md](./ROADMAP.md) を確認してください。
 
+> 🤖 **AI contributors:** この repo は公開 OSS です。変更前に [AGENTS.md](./AGENTS.md) を読んでください。Claude Code は [CLAUDE.md](./CLAUDE.md) から同じルールに誘導されます。
+
 `yt-dlp` で音声を取り、`faster-whisper` (NVIDIA) または `mlx-whisper` (Apple Silicon) でローカル文字起こしし、**Claude Code / Cursor / その他のエージェントが SKILL.md を読んでその場で記事を生成**する設計。OpenAI Whisper API も Anthropic API も叩きません。
 
 ```
