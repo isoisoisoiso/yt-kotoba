@@ -24,14 +24,17 @@ dist/
 # Editor / OS
 .vscode/
 .idea/
+.obsidian/
 .DS_Store
 Thumbs.db
 
 # Output (when run from inside repo for testing)
 /output/
 /.tmp/
+/projects/
 *.mp3
 *.m4a
+*.mp4
 *.wav
 
 # Whisper model cache (huge)

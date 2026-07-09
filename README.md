@@ -95,7 +95,39 @@ cat ./output/XXXX.packed.md | ollama run llama3 \
 yt-kotoba download "URL" --out ./output           # 音声 DL のみ
 yt-kotoba transcribe ./output/XXXX.audio.m4a      # 既存音声 → JSON
 yt-kotoba pack ./output/XXXX.transcript.json      # 既存 JSON → packed.md
+yt-kotoba qa ./projects/my-project/sources/youtube/XXXX  # 解析 JSON と元動画の QA
+yt-kotoba manifest ./projects/my-project/sources/youtube/XXXX  # 別プロダクト向け manifest
 ```
+
+### 解析 QA（内部確認用）
+
+`qa` は `video.mp4` と `telops.raw.json` / `visual_events.json` などの解析ファイルを照合し、確認用フレームとレポートを `<source_dir>/qa/` に出します。これは元動画の派生確認物なので、公開・配布用ではありません。実行後は別プロダクトが読む入口として `source_pack_manifest.json` も更新します。
+
+```bash
+yt-kotoba qa ./projects/soccer_news_ryusei/sources/youtube/hzlTJnEZ3xw
+```
+
+主な出力:
+
+```text
+source_pack_manifest.json
+
+qa/
+├── telop_check_sheet.jpg
+├── event_check_sheet.jpg
+├── analysis_check.md
+└── mismatches.json
+```
+
+### Source pack manifest（別プロダクト連携）
+
+`source_pack_manifest.json` は、`video-production-kit` や `video-experiments` などの別プロダクトが解析パックを読むための固定入口です。manifest 内のパスはすべて manifest からの相対パスで、raw 解析・元動画・QA 画像は `internal_only`、抽象化済み recipe は公開生成に使える入力として区別します。
+
+```bash
+yt-kotoba manifest ./projects/soccer_news_ryusei/sources/youtube/hzlTJnEZ3xw
+```
+
+別プロダクト側は `source_pack_manifest.json` を受け取り、`files.recipes` を公開・量産向けに、`files.internal_analysis` と `files.source` を内部確認向けに読む想定です。
 
 ## 出力ファイル
 

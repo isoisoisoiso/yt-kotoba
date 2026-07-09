@@ -42,6 +42,7 @@ my-product/
 ├── sources/
 │   └── youtube/
 │       └── <video-id>/
+│           ├── source_pack_manifest.json
 │           ├── metadata.json
 │           ├── description.md
 │           ├── thumbnail.jpg
@@ -90,6 +91,8 @@ YouTube context collection:
 
 Packing and reuse:
 
+- [x] Add `source_pack_manifest.json` as the stable entrypoint for other
+      products to read a local source analysis pack without guessing filenames.
 - [ ] Extend `packed.md` to include a compact source card: title, channel,
       description summary, thumbnail path, comment count, and source file paths.
 - [ ] Include only selected/top comments in `packed.md`; keep full comments in

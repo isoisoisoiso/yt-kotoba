@@ -15,6 +15,8 @@ from pathlib import Path
 from .config import load_env
 from .download import download_audio, extract_video_id
 from .pack_transcript import pack_transcript
+from .qa import run_source_qa
+from .source_pack import write_source_pack_manifest
 from .transcribe import transcribe_with_cache
 
 
@@ -89,6 +91,23 @@ def cmd_pack(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_qa(args: argparse.Namespace) -> int:
+    summary = run_source_qa(
+        Path(args.source_dir),
+        out_dir=Path(args.out) if args.out else None,
+        max_telop_previews=args.max_telop_previews,
+    )
+    printable = {k: v for k, v in summary.items() if k != "issues"}
+    print(json.dumps(printable, ensure_ascii=False, indent=2))
+    return 0 if summary["issue_counts"]["error"] == 0 else 1
+
+
+def cmd_manifest(args: argparse.Namespace) -> int:
+    manifest_path, manifest = write_source_pack_manifest(Path(args.source_dir))
+    print(json.dumps({"manifest": str(manifest_path), "schema": manifest["schema"]}, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="yt-kotoba",
@@ -130,6 +149,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_pk.add_argument("--out")
     p_pk.set_defaults(func=cmd_pack)
 
+    p_qa = sub.add_parser("qa", help="QA analysis JSON against a downloaded source video")
+    p_qa.add_argument("source_dir", help="Directory containing video.mp4 and analysis JSON files")
+    p_qa.add_argument("--out", help="Output QA directory (default: <source_dir>/qa)")
+    p_qa.add_argument("--max-telop-previews", type=int, default=48)
+    p_qa.set_defaults(func=cmd_qa)
+
+    p_manifest = sub.add_parser(
+        "manifest",
+        help="Write source_pack_manifest.json for a source directory",
+    )
+    p_manifest.add_argument("source_dir", help="Directory containing source analysis files")
+    p_manifest.set_defaults(func=cmd_manifest)
+
     return parser
 
 
@@ -137,7 +169,16 @@ def main() -> int:
     parser = build_parser()
     # Treat bare `yt-kotoba <url>` as `yt-kotoba run <url>` for ergonomics
     argv = sys.argv[1:]
-    if argv and argv[0] not in {"run", "download", "transcribe", "pack", "-h", "--help"}:
+    if argv and argv[0] not in {
+        "run",
+        "download",
+        "transcribe",
+        "pack",
+        "qa",
+        "manifest",
+        "-h",
+        "--help",
+    }:
         argv = ["run"] + argv
     args = parser.parse_args(argv)
     return int(args.func(args) or 0)
