@@ -40,3 +40,6 @@ Thumbs.db
 # Whisper model cache (huge)
 *.pt
 *.bin
+
+# Local research artifacts (media, transcripts, analysis) — not for the public repo
+/research/
