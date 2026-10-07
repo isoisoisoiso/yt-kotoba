@@ -188,6 +188,12 @@ def build_source_pack_manifest(
                 "internal_reference",
                 "agent-readable transcript pack",
             ),
+            "transcript_repair": _file_ref(
+                source_dir,
+                "transcript_repair.json",
+                "internal_reference",
+                "Whisper repeat-loop spans that were re-transcribed",
+            ),
         },
         "visual_samples": {
             "frames_every_1s": _file_ref(
@@ -201,6 +207,18 @@ def build_source_pack_manifest(
                 "frames/every_2s",
                 "internal_only_do_not_publish",
                 "sampled source frames",
+            ),
+            "frames_every_10s": _file_ref(
+                source_dir,
+                "frames/every_10s",
+                "internal_only_do_not_publish",
+                "sampled source frames for structure analysis",
+            ),
+            "sheets_dir": _file_ref(
+                source_dir,
+                "frames/sheets",
+                "internal_only_do_not_publish",
+                "frame contact sheets (every_<n>s_sheetNN.jpg for add --with-frames)",
             ),
             "sheet_every_1s": _file_ref(
                 source_dir,
@@ -216,6 +234,12 @@ def build_source_pack_manifest(
             ),
         },
         "internal_analysis": {
+            "visual_rhythm": _file_ref(
+                source_dir,
+                "visual_rhythm.json",
+                "internal_analysis_only",
+                "how often the picture changes (frame-difference estimate)",
+            ),
             "telops": _file_ref(
                 source_dir,
                 "telops.raw.json",
@@ -311,6 +335,7 @@ def build_source_pack_manifest(
         },
         "comments": {
             "status": comments_status,
+            "counts": _load_json(comments_path).get("counts"),
         },
         "files": files,
         "qa_status": qa_status,
