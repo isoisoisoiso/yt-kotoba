@@ -28,7 +28,9 @@ class TranscriptResult(TypedDict):
     lang: str
 
 
-def _transcribe_mlx(audio_path: Path, lang: str) -> TranscriptResult:
+def _transcribe_mlx(
+    audio_path: Path, lang: str, condition_on_previous_text: bool = True
+) -> TranscriptResult:
     try:
         import mlx_whisper
     except ImportError as e:
@@ -38,6 +40,7 @@ def _transcribe_mlx(audio_path: Path, lang: str) -> TranscriptResult:
 
     repo_map = {
         "large-v3": "mlx-community/whisper-large-v3-mlx",
+        "large-v3-turbo": "mlx-community/whisper-large-v3-turbo",
         "large-v2": "mlx-community/whisper-large-v2-mlx",
         "medium": "mlx-community/whisper-medium-mlx",
         "small": "mlx-community/whisper-small-mlx",
@@ -49,6 +52,7 @@ def _transcribe_mlx(audio_path: Path, lang: str) -> TranscriptResult:
         path_or_hf_repo=repo,
         language=lang,
         word_timestamps=False,
+        condition_on_previous_text=condition_on_previous_text,
         verbose=False,
     )
 
@@ -67,7 +71,9 @@ def _transcribe_mlx(audio_path: Path, lang: str) -> TranscriptResult:
     )
 
 
-def _transcribe_faster(audio_path: Path, lang: str) -> TranscriptResult:
+def _transcribe_faster(
+    audio_path: Path, lang: str, condition_on_previous_text: bool = True
+) -> TranscriptResult:
     try:
         from faster_whisper import WhisperModel
     except ImportError as e:
@@ -90,6 +96,7 @@ def _transcribe_faster(audio_path: Path, lang: str) -> TranscriptResult:
         language=lang,
         word_timestamps=False,
         vad_filter=False,
+        condition_on_previous_text=condition_on_previous_text,
     )
 
     segments: list[Segment] = []
@@ -110,11 +117,18 @@ def _transcribe_faster(audio_path: Path, lang: str) -> TranscriptResult:
     )
 
 
-def transcribe_audio(audio_path: Path, lang: str = "ja") -> TranscriptResult:
-    """Transcribe an audio file, picking backend by platform."""
+def transcribe_audio(
+    audio_path: Path, lang: str = "ja", condition_on_previous_text: bool = True
+) -> TranscriptResult:
+    """Transcribe an audio file, picking backend by platform.
+
+    `condition_on_previous_text=False` stops Whisper from feeding its previous
+    output back as a prompt. It is slower to settle on style but avoids the
+    repeat loops that long recordings sometimes fall into (see repair.py).
+    """
     if USE_MLX:
-        return _transcribe_mlx(audio_path, lang)
-    return _transcribe_faster(audio_path, lang)
+        return _transcribe_mlx(audio_path, lang, condition_on_previous_text)
+    return _transcribe_faster(audio_path, lang, condition_on_previous_text)
 
 
 def transcribe_with_cache(audio_path: Path, lang: str = "ja") -> TranscriptResult:

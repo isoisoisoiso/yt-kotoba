@@ -62,23 +62,28 @@ Implementation steps:
 - [ ] Add `yt-kotoba init <project-dir>` to create a working project directory.
 - [ ] Add `project.yaml` with product/genre/audience fields that agents can read
       before generating content.
-- [ ] Add `yt-kotoba add <url>` as the project-root command for ingesting a
-      YouTube source into `sources/youtube/<video-id>/`.
+- [x] Add `yt-kotoba add <url>` as the project-root command for ingesting a
+      YouTube source into `sources/youtube/<video-id>/` (without `init` /
+      `project.yaml` yet).
 - [ ] Keep `yt-kotoba run <url> --out ./output` working as a legacy/simple mode
       until the project workflow is stable.
-- [ ] Store source files with stable names inside each video directory rather
-      than prefixing every file with the video ID.
+- [x] Store source files with stable names inside each video directory rather
+      than prefixing every file with the video ID (`add`).
 - [ ] Update `SKILL.md` so agents treat the project root as the working context
       and write drafts under `drafts/<video-id>/`.
 - [ ] Update `README.md` with the project workflow once the commands exist.
 
 YouTube context collection:
 
+- [x] Fetch video metadata without an API key (yt-dlp) into `metadata.json` /
+      `description.md` (`yt-kotoba add`). A YouTube Data API path stays optional.
 - [ ] Fetch video metadata via YouTube Data API `videos.list`: title, channel,
       published date, duration, statistics, description, tags, and thumbnail
       URLs.
-- [ ] Download the best available thumbnail from the metadata into
-      `thumbnail.jpg` or `thumbnail.webp`.
+- [x] Download the best available thumbnail into `thumbnail.jpg`.
+- [x] Fetch comments and replies without an API key (yt-dlp) into
+      `comments.json`, with root / reply / uploader counts and a fetch status
+      (`yt-kotoba add --with-comments`).
 - [ ] Fetch comments via YouTube Data API `commentThreads.list`.
 - [ ] Fetch full replies via `comments.list(parentId=...)` when requested.
 - [ ] Require `YOUTUBE_API_KEY` only when metadata/comments flags need the Data
@@ -88,6 +93,11 @@ YouTube context collection:
 - [ ] Record API fetch status/errors in metadata so agents can distinguish
       "comments disabled", "API key missing", "quota exceeded", and "not
       requested".
+
+Transcript quality:
+
+- [x] Detect Whisper repeat loops and re-transcribe only those spans with
+      `condition_on_previous_text=False` (`run` / `add`, `transcript_repair.json`).
 
 Packing and reuse:
 
@@ -127,7 +137,8 @@ By v1.0 we'll commit to a final name. The current `yt-kotoba` may evolve into so
 
 ## Possibly later (no commitment)
 
-- Frame extraction (ffmpeg-based) — content asset 用
+- Frame extraction for content assets (analysis frames, contact sheets and
+  picture-change rhythm already ship via `add --with-frames`)
 - Speaker diarization (pyannote.audio) — 対談動画・会議用
 - Local web dashboard for editing drafts (no auth, local-only)
 - Cloudflare Workers cloud version (only if scale demands)

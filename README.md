@@ -92,12 +92,41 @@ cat ./output/XXXX.packed.md | ollama run llama3 \
 ### サブコマンド（部分実行）
 
 ```bash
+yt-kotoba add "URL" --with-comments --with-frames   # 分析用ソースパック（下記）
 yt-kotoba download "URL" --out ./output           # 音声 DL のみ
 yt-kotoba transcribe ./output/XXXX.audio.m4a      # 既存音声 → JSON
 yt-kotoba pack ./output/XXXX.transcript.json      # 既存 JSON → packed.md
 yt-kotoba qa ./projects/my-project/sources/youtube/XXXX  # 解析 JSON と元動画の QA
 yt-kotoba manifest ./projects/my-project/sources/youtube/XXXX  # 別プロダクト向け manifest
 ```
+
+### 参考動画のソースパック（構成分析用）
+
+`add` は 1 本の動画を `<out>/<動画ID>/` に固定のファイル名でまとめます。台本・構成の分析をするエージェントが、ファイル名を推測せずに読めるようにするためのコマンドです。API キーは不要です（メタデータとコメントも yt-dlp で取ります）。
+
+```bash
+yt-kotoba add "URL" --out ./sources/youtube --with-comments --with-frames --drop-video
+```
+
+```text
+sources/youtube/XXXX/
+├── metadata.json          # 題名・チャンネル・登録者・再生・公開日・尺・チャプター
+├── description.md
+├── thumbnail.jpg
+├── audio.m4a
+├── transcript.json
+├── transcript_repair.json # Whisper の繰り返し誤認識をやり直した区間
+├── packed.md
+├── comments.json          # --with-comments: 元コメント／返信／投稿者の件数と取得状態
+├── frames/every_10s/      # --with-frames: 10 秒ごとのフレーム
+├── frames/sheets/         # --with-frames: 20 コマ 1 枚の一覧
+├── visual_rhythm.json     # --with-frames: 絵の切り替え間隔の目安
+└── source_pack_manifest.json
+```
+
+- **繰り返し誤認識の修正**: 長い音声で Whisper が同じ語句を数分くり返し、本当の発話が抜けることがあります。`run` と `add` は既定でその区間を検出し、`condition_on_previous_text=False` でその区間だけ文字起こしし直します（`--no-repair` で無効）。
+- **`--drop-video`**: フレームを取り終えたら `video.mp4` を消します。構成分析に必要なのは文字起こし・コメント・一覧画像で、1 本あたり数 MB です。容量の大きいマシンで取得し、軽い成果物だけを分析用マシンへ運ぶ使い方を想定しています。
+- 取得物はすべて第三者の素材です。公開・再配布しないでください（manifest の `distribution` を参照）。
 
 ### 解析 QA（内部確認用）
 

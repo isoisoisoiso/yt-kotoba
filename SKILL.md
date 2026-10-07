@@ -202,10 +202,21 @@ Application:
 
 If the user mentions tone preferences in chat ("もっとカジュアルに" / "硬めの口調で") and there's no voice.yaml, **offer to create one** so the next run picks it up automatically.
 
+## Source packs for structure analysis
+
+When the user wants to *analyze* reference videos (structure, hooks, comments) rather than repurpose them, ingest each one with:
+
+```bash
+yt-kotoba add "<URL>" --out <dir> --with-comments --with-frames [--drop-video]
+```
+
+Then read `<dir>/<id>/source_pack_manifest.json` first and follow its paths. Read `packed.md` in full, `comments.json` (use `counts` — never hand-count; root comments, replies and uploader posts are separate), the contact sheets in `frames/sheets/`, and `visual_rhythm.json` as a rough range, not a cut list. If `transcript_repair.json` lists a span with `loop_remains: true`, say that part of the transcript is unreliable instead of quoting it. Never publish anything from a source pack.
+
 ## Common pitfalls
 
 - **YouTube anti-bot ("Sign in to confirm you're not a bot" / HTTP 403)** — yt-dlp now needs cookies for many videos. Pass `--cookies-browser chrome` (or `edge`/`firefox`/`brave`). The browser must be **closed** first to release its cookie DB lock. For headless environments, export cookies to a Netscape-format `cookies.txt` and use `--cookies-file`.
-- **First run downloads the Whisper model (~3GB)** — warn the user before kicking off, especially on metered connections.
+- **First run downloads the Whisper model (~3GB for large-v3, ~1.5GB for large-v3-turbo)** — warn the user before kicking off, especially on metered connections or small disks. `WHISPER_MODEL=large-v3-turbo` is much faster with similar accuracy.
+- **Whisper repeat loops** — long audio can make Whisper repeat one phrase for minutes and drop real speech. `run`/`add` repair these spans automatically; check the printed `repaired ...` lines.
 - **CUDA OOM on small GPUs** — set `WHISPER_COMPUTE_TYPE=int8` in `.env` to halve VRAM.
 - **Long videos (>30 min)** — `<id>.packed.md` grows large; consider passing `--block-chars 600` to `yt-kotoba pack` to make blocks bigger.
 - **Non-Japanese videos** — pass `--lang en` (or other ISO code). The default generation rules above target Japanese output; for non-Japanese final output, adapt the rules in this SKILL.md to the target language.

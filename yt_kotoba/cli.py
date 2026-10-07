@@ -16,8 +16,9 @@ from .config import load_env
 from .download import download_audio, extract_video_id
 from .pack_transcript import pack_transcript
 from .qa import run_source_qa
+from .repair import repair_transcript
 from .source_pack import write_source_pack_manifest
-from .transcribe import transcribe_with_cache
+from .transcribe import transcribe_audio, transcribe_with_cache
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -41,6 +42,13 @@ def cmd_run(args: argparse.Namespace) -> int:
     print("[2/3] transcribing (this may take a while on first run)...")
     transcript = transcribe_with_cache(audio_path, lang=args.lang)
     transcript_path = out_dir / f"{video_id}.transcript.json"
+    if not args.no_repair:
+        transcript, report = repair_transcript(transcript, audio_path, args.lang)
+        if report["repaired"]:
+            transcript_path.write_text(
+                json.dumps(transcript, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            _print_repair(report)
     print(f"      -> {transcript_path.name}  ({len(transcript['segments'])} segments)")
 
     print("[3/3] packing transcript...")
@@ -53,6 +61,82 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"\n     Next: feed {packed_path.name} to your agent (Claude Code etc).")
     print(f"     The agent reads SKILL.md and produces X thread / note article")
     print(f"     directly into {out_dir}/")
+    return 0
+
+
+def _print_repair(report: dict) -> None:
+    for r in report["repaired"]:
+        span = f"{r['start_ms'] // 60000:02d}:{r['start_ms'] // 1000 % 60:02d}-" \
+               f"{r['end_ms'] // 60000:02d}:{r['end_ms'] // 1000 % 60:02d}"
+        note = "  (loop remains: listen to this part)" if r["loop_remains"] else ""
+        print(f"      repaired Whisper repeat loop {span}{note}")
+
+
+def cmd_add(args: argparse.Namespace) -> int:
+    """Ingest one video as a source pack with stable file names under <out>/<video-id>/."""
+    from .context import fetch_comments, fetch_metadata
+    from .visual import download_video, measure_rhythm, sample_frames
+
+    load_env()
+    video_id = extract_video_id(args.url)
+    src = Path(args.out) / video_id
+    src.mkdir(parents=True, exist_ok=True)
+    cookies = {"cookies_browser": args.cookies_browser, "cookies_file": args.cookies_file}
+    steps = 3 + int(args.with_comments) + int(args.with_frames)
+    n = 0
+
+    def step(msg: str) -> None:
+        nonlocal n
+        n += 1
+        print(f"[{n}/{steps}] {msg}")
+
+    print(f"[yt-kotoba] video_id = {video_id} -> {src}")
+    step("metadata, description, thumbnail...")
+    meta = fetch_metadata(video_id, src, **cookies)
+    print(f"      -> {meta.get('title')}")
+
+    step("audio + transcript (repeat loops are repaired)...")
+    audio = src / "audio.m4a"
+    if not (audio.exists() and audio.stat().st_size > 0):
+        downloaded = download_audio(video_id, src, audio_format="m4a", **cookies)
+        downloaded.rename(audio)
+    transcript_path = src / "transcript.json"
+    if transcript_path.exists() and transcript_path.stat().st_size > 0:
+        transcript = json.loads(transcript_path.read_text(encoding="utf-8"))
+    else:
+        transcript = transcribe_audio(audio, lang=args.lang)
+        report = {"repaired": [], "detected_spans": 0, "skipped": bool(args.no_repair)}
+        if not args.no_repair:
+            transcript, report = repair_transcript(transcript, audio, args.lang)
+            _print_repair(report)
+        transcript_path.write_text(json.dumps(transcript, ensure_ascii=False, indent=2), encoding="utf-8")
+        (src / "transcript_repair.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    print(f"      -> transcript.json ({len(transcript['segments'])} segments)")
+
+    step("packing transcript...")
+    (src / "packed.md").write_text(pack_transcript(transcript), encoding="utf-8")
+
+    if args.with_comments:
+        step("comments...")
+        c = fetch_comments(video_id, src, max_comments=args.comments_max,
+                           sort=args.comments_order, **cookies)
+        k = c["counts"]
+        print(f"      -> {c['status']}: {k['total']} total = {k['root']} root + {k['replies']} replies "
+              f"({k['uploader_posts']} by uploader)")
+
+    if args.with_frames:
+        step(f"video, frames every {args.frame_every}s, contact sheets, picture-change rhythm...")
+        video = download_video(video_id, src, max_height=args.max_height, **cookies)
+        sample_frames(video, src, every_sec=args.frame_every)
+        r = measure_rhythm(video, src)
+        spans = ", ".join(f"th{t}: {v['sec_per_change']}s" for t, v in r["by_threshold"].items())
+        print(f"      -> picture changes about every {spans}")
+        if args.drop_video:
+            video.unlink()
+            print("      -> video.mp4 deleted (--drop-video)")
+
+    manifest_path, _ = write_source_pack_manifest(src)
+    print(f"\n[OK] {manifest_path}")
     return 0
 
 
@@ -129,7 +213,34 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--audio-format", default="m4a", help="Audio format")
     p_run.add_argument("--cookies-browser", help=cookies_help_browser)
     p_run.add_argument("--cookies-file", help=cookies_help_file)
+    p_run.add_argument("--no-repair", action="store_true",
+                       help="Do not re-transcribe Whisper repeat loops")
     p_run.set_defaults(func=cmd_run)
+
+    p_add = sub.add_parser(
+        "add",
+        help="Ingest a video as a source pack: <out>/<id>/ with metadata, transcript, "
+             "optional comments and frames",
+    )
+    p_add.add_argument("url", help="YouTube URL or 11-char video ID")
+    p_add.add_argument("--out", default="./sources/youtube",
+                       help="Parent directory; files go to <out>/<video-id>/")
+    p_add.add_argument("--lang", default="ja")
+    p_add.add_argument("--no-repair", action="store_true",
+                       help="Do not re-transcribe Whisper repeat loops")
+    p_add.add_argument("--with-comments", action="store_true",
+                       help="Fetch comments via yt-dlp (no API key) into comments.json")
+    p_add.add_argument("--comments-max", type=int, default=2000)
+    p_add.add_argument("--comments-order", choices=["top", "new"], default="top")
+    p_add.add_argument("--with-frames", action="store_true",
+                       help="Download video, sample frames, contact sheets, picture-change rhythm")
+    p_add.add_argument("--frame-every", type=int, default=10, help="Seconds between frames")
+    p_add.add_argument("--max-height", type=int, default=1080)
+    p_add.add_argument("--drop-video", action="store_true",
+                       help="Delete video.mp4 after frames are taken (saves disk)")
+    p_add.add_argument("--cookies-browser", help=cookies_help_browser)
+    p_add.add_argument("--cookies-file", help=cookies_help_file)
+    p_add.set_defaults(func=cmd_add)
 
     p_dl = sub.add_parser("download", help="Download audio only")
     p_dl.add_argument("url")
@@ -171,6 +282,7 @@ def main() -> int:
     argv = sys.argv[1:]
     if argv and argv[0] not in {
         "run",
+        "add",
         "download",
         "transcribe",
         "pack",
