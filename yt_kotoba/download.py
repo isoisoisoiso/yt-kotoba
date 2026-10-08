@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from .tools import find_ffmpeg, find_yt_dlp
+
 YOUTUBE_ID_RE = re.compile(r"^[\w-]{11}$")
 
 
@@ -57,7 +59,7 @@ def download_audio(
         return out_path
 
     cmd = [
-        "yt-dlp",
+        find_yt_dlp(),
         "-x",
         "--audio-format", audio_format,
         "--no-playlist",
@@ -65,6 +67,11 @@ def download_audio(
         "--no-warnings",
         "-o", str(out_dir / f"{video_id}.audio.%(ext)s"),
     ]
+
+    ffmpeg = find_ffmpeg(required=False)
+    if ffmpeg is not None:
+        cmd += ["--ffmpeg-location", ffmpeg]
+
     if cookies_browser:
         cmd += ["--cookies-from-browser", cookies_browser]
     elif cookies_file:
@@ -73,10 +80,6 @@ def download_audio(
 
     try:
         subprocess.run(cmd, check=True)
-    except FileNotFoundError as e:
-        raise RuntimeError(
-            "yt-dlp not found. Install with: brew install yt-dlp / scoop install yt-dlp"
-        ) from e
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"yt-dlp failed for {video_id}: exit {e.returncode}") from e
 

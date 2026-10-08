@@ -6,6 +6,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.cache/
+.hf-cache/
 .venv/
 venv/
 env/
@@ -22,6 +24,7 @@ dist/
 *.pem
 
 # Editor / OS
+.claude/
 .vscode/
 .idea/
 .obsidian/

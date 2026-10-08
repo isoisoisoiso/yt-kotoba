@@ -1,6 +1,6 @@
 ---
 name: yt-kotoba
-description: Turn a YouTube video into an X thread, a note article, or other downstream Japanese text content. Local Whisper transcription (no OpenAI API needed) + agent-driven generation (no Anthropic API needed). Triggers on YouTube URLs combined with phrases like "X スレ作って" / "note 記事にして" / "この動画から記事書いて" / "repurpose this video" / "この動画を素材にして発信用に整えて".
+description: Turn a YouTube video into an X thread, a note article, or other downstream Japanese text content. Local Whisper transcription, optional local speaker diarization, and agent-driven generation. Triggers on YouTube URLs combined with phrases like "X スレ作って" / "note 記事にして" / "話者を分けて" / "この動画から記事書いて" / "repurpose this video" / "この動画を素材にして発信用に整えて".
 ---
 
 # yt-kotoba
@@ -19,6 +19,7 @@ These cause silent failures or broken output if violated. Memorize them.
 6. **Confirm strategy before generation** — if the user asks vaguely ("この動画から何か作って"), surface 2–3 options (X thread? note article? both? blog?) and wait for confirmation before generating.
 7. **All file writes are deterministic by video ID** — `<id>.audio.m4a`, `<id>.transcript.json`, `<id>.packed.md`, `<id>.x_thread.md`, `<id>.threads.md`, `<id>.note.md`. Never timestamp or randomize names.
 8. **Apply `voice.yaml` if present** — if `<user_dir>/output/voice.yaml` (or `<user_dir>/voice.yaml`) exists, every generated artifact must obey its rules. Mention which rules are applied in your reply.
+9. **Diarization is explicit and anonymous** — add `--diarize` only when the user asks to separate speakers. Treat `SPEAKER_00` labels as anonymous; never infer real identities from voice alone or present them as verified names. Use the local Community-1 pipeline, never the paid pyannoteAI cloud model.
 
 Everything else below is a worked example. Deviate when the material calls for it.
 
@@ -32,9 +33,15 @@ scoop install yt-dlp ffmpeg           # Windows
 # Python deps (pick one)
 pip install -e ".[cuda]"  # NVIDIA GPU (Win/Linux) — uses faster-whisper
 pip install -e ".[mlx]"   # Apple Silicon — uses mlx-whisper
+
+# Optional speaker diarization (Python 3.10+)
+pip install -e ".[mlx,diarization]"   # or .[cuda,diarization]
 ```
 
-No API keys. No `.env` mandatory.
+No paid API keys and no `.env` are mandatory. Optional diarization needs a free
+Hugging Face read token for the first model download: accept the Community-1
+model conditions, create a read token, and run `hf auth login`. Never ask the
+user to paste that token into chat or commit it to the repository.
 
 ## Pipeline overview
 
@@ -44,6 +51,7 @@ User: "<URL> から X スレと note 記事作って"
    ▼ Bash:  yt-kotoba run <URL> --out ./output
    │       ↳ download.py        →  <id>.audio.m4a       (cached)
    │       ↳ transcribe.py      →  <id>.transcript.json (cached)
+   │       ↳ diarize.py         →  anonymous speaker labels (only with --diarize)
    │       ↳ pack_transcript.py →  <id>.packed.md       (LLM reading view)
    │       (CLI stops here — no API call)
    │
@@ -57,7 +65,7 @@ User: "<URL> から X スレと note 記事作って"
 
 1. **Inventory.** Extract the video ID from the URL. Check if `<user_dir>/output/<id>.transcript.json` already exists — if so, skip download + transcribe and reuse.
 2. **Strategy.** Confirm with the user: which outputs? (x / note / both / something else). Check for `voice.yaml` — if present, mention what brand-voice rules will be applied.
-3. **Pipeline.** Run `yt-kotoba run <url> --out ./output`. This produces `<id>.packed.md`. **Do not call any external LLM API.**
+3. **Pipeline.** Run `yt-kotoba run <url> --out ./output`. If the user explicitly asks to separate speakers, add `--diarize` and, when known, `--num-speakers N`. This produces `<id>.packed.md`. **Do not call any external LLM API.**
 4. **Read.** Read `<id>.packed.md` into your context. If it's longer than ~30K tokens, scan headers and pull the most substantive blocks — don't truncate silently.
 5. **Generate.** Apply the generation rules below. Produce one file per requested format under `./output/`. **You are the LLM here — write the content directly using your own reasoning.**
 6. **Self-check.** Before showing the user:
@@ -217,6 +225,8 @@ Then read `<dir>/<id>/source_pack_manifest.json` first and follow its paths. Rea
 - **YouTube anti-bot ("Sign in to confirm you're not a bot" / HTTP 403)** — yt-dlp now needs cookies for many videos. Pass `--cookies-browser chrome` (or `edge`/`firefox`/`brave`). The browser must be **closed** first to release its cookie DB lock. For headless environments, export cookies to a Netscape-format `cookies.txt` and use `--cookies-file`.
 - **First run downloads the Whisper model (~3GB for large-v3, ~1.5GB for large-v3-turbo)** — warn the user before kicking off, especially on metered connections or small disks. `WHISPER_MODEL=large-v3-turbo` is much faster with similar accuracy.
 - **Whisper repeat loops** — long audio can make Whisper repeat one phrase for minutes and drop real speech. `run`/`add` repair these spans automatically; check the printed `repaired ...` lines.
+- **Diarization authentication errors** — confirm the user accepted the [Community-1 conditions](https://huggingface.co/pyannote/speaker-diarization-community-1), created a Read token, and ran `hf auth login`. Do not request or print the token.
+- **Speaker labels are not identities** — `SPEAKER_00` and `SPEAKER_01` separate voices but do not establish real names. Attribute a real name only when the source itself makes the mapping unambiguous, and describe it as contextual attribution rather than voice verification.
 - **CUDA OOM on small GPUs** — set `WHISPER_COMPUTE_TYPE=int8` in `.env` to halve VRAM.
 - **Long videos (>30 min)** — `<id>.packed.md` grows large; consider passing `--block-chars 600` to `yt-kotoba pack` to make blocks bigger.
 - **Non-Japanese videos** — pass `--lang en` (or other ISO code). The default generation rules above target Japanese output; for non-Japanese final output, adapt the rules in this SKILL.md to the target language.

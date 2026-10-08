@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from .config import load_env
+from .diarize import diarize_transcript, diarize_with_cache
 from .download import download_audio, extract_video_id
 from .pack_transcript import pack_transcript
 from .qa import run_source_qa
@@ -29,7 +30,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     video_id = extract_video_id(args.url)
     print(f"[yt-kotoba] video_id = {video_id}")
 
-    print("[1/3] downloading audio...")
+    total_steps = 4 if args.diarize else 3
+
+    print(f"[1/{total_steps}] downloading audio...")
     audio_path = download_audio(
         args.url,
         out_dir,
@@ -39,7 +42,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     )
     print(f"      -> {audio_path.name}")
 
-    print("[2/3] transcribing (this may take a while on first run)...")
+    print(f"[2/{total_steps}] transcribing (this may take a while on first run)...")
     transcript = transcribe_with_cache(audio_path, lang=args.lang)
     transcript_path = out_dir / f"{video_id}.transcript.json"
     if not args.no_repair:
@@ -51,7 +54,20 @@ def cmd_run(args: argparse.Namespace) -> int:
             _print_repair(report)
     print(f"      -> {transcript_path.name}  ({len(transcript['segments'])} segments)")
 
-    print("[3/3] packing transcript...")
+    if args.diarize:
+        # After repair, so speaker labels attach to the repaired segments.
+        print(f"[3/{total_steps}] identifying speakers (anonymous labels)...")
+        transcript = diarize_with_cache(
+            audio_path,
+            transcript,
+            num_speakers=args.num_speakers,
+            min_speakers=args.min_speakers,
+            max_speakers=args.max_speakers,
+        )
+        speaker_count = len(transcript["diarization"]["speakers"])
+        print(f"      -> {transcript_path.name}  ({speaker_count} speakers)")
+
+    print(f"[{total_steps}/{total_steps}] packing transcript...")
     packed = pack_transcript(transcript)
     packed_path = out_dir / f"{video_id}.packed.md"
     packed_path.write_text(packed, encoding="utf-8")
@@ -59,7 +75,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     print("\n[OK] pipeline done.")
     print(f"\n     Next: feed {packed_path.name} to your agent (Claude Code etc).")
-    print(f"     The agent reads SKILL.md and produces X thread / note article")
+    print("     The agent reads SKILL.md and produces X thread / note article")
     print(f"     directly into {out_dir}/")
     return 0
 
@@ -158,7 +174,26 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
     if not audio_path.exists():
         print(f"Audio file not found: {audio_path}", file=sys.stderr)
         return 1
-    result = transcribe_with_cache(audio_path, lang=args.lang)
+    if args.no_cache:
+        result = transcribe_audio(audio_path, lang=args.lang)
+        if args.diarize:
+            result = diarize_transcript(
+                audio_path,
+                result,
+                num_speakers=args.num_speakers,
+                min_speakers=args.min_speakers,
+                max_speakers=args.max_speakers,
+            )
+    else:
+        result = transcribe_with_cache(audio_path, lang=args.lang)
+        if args.diarize:
+            result = diarize_with_cache(
+                audio_path,
+                result,
+                num_speakers=args.num_speakers,
+                min_speakers=args.min_speakers,
+                max_speakers=args.max_speakers,
+            )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
@@ -192,6 +227,21 @@ def cmd_manifest(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_diarization_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--diarize",
+        action="store_true",
+        help="Label transcript segments by speaker with local pyannote.audio",
+    )
+    parser.add_argument(
+        "--num-speakers",
+        type=int,
+        help="Known exact speaker count (improves diarization when accurate)",
+    )
+    parser.add_argument("--min-speakers", type=int, help="Minimum expected speaker count")
+    parser.add_argument("--max-speakers", type=int, help="Maximum expected speaker count")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="yt-kotoba",
@@ -215,6 +265,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--cookies-file", help=cookies_help_file)
     p_run.add_argument("--no-repair", action="store_true",
                        help="Do not re-transcribe Whisper repeat loops")
+    _add_diarization_args(p_run)
     p_run.set_defaults(func=cmd_run)
 
     p_add = sub.add_parser(
@@ -253,6 +304,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_tr = sub.add_parser("transcribe", help="Transcribe an existing audio file")
     p_tr.add_argument("audio")
     p_tr.add_argument("--lang", default="ja")
+    p_tr.add_argument("--no-cache", action="store_true", help="Skip cache")
+    _add_diarization_args(p_tr)
     p_tr.set_defaults(func=cmd_transcribe)
 
     p_pk = sub.add_parser("pack", help="Pack a transcript JSON into Markdown")
@@ -293,7 +346,11 @@ def main() -> int:
     }:
         argv = ["run"] + argv
     args = parser.parse_args(argv)
-    return int(args.func(args) or 0)
+    try:
+        return int(args.func(args) or 0)
+    except RuntimeError as e:
+        print(f"yt-kotoba: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

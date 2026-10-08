@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
 
+from .tools import find_ffmpeg
 from .transcribe import transcribe_audio
 
 PAD_MS = 10_000
@@ -63,11 +63,9 @@ def find_loop_spans(segments: list[dict[str, Any]], pad_ms: int = PAD_MS) -> lis
 
 
 def _cut_audio(audio_path: Path, start_ms: int, end_ms: int, out_path: Path) -> None:
-    if shutil.which("ffmpeg") is None:
-        raise RuntimeError("ffmpeg is required to repair transcripts but was not found in PATH.")
     subprocess.run(
         [
-            "ffmpeg", "-loglevel", "error", "-y",
+            find_ffmpeg(), "-loglevel", "error", "-y",
             "-ss", f"{start_ms / 1000:.3f}", "-to", f"{end_ms / 1000:.3f}",
             "-i", str(audio_path), "-ac", "1", "-ar", "16000", str(out_path),
         ],

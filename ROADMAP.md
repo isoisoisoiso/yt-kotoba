@@ -8,6 +8,7 @@ The narrow MVP. Validates the core hypothesis: *local Whisper + agent-driven gen
 
 - [x] YouTube URL → 音声 DL (yt-dlp)
 - [x] 音声 → 文字起こし (faster-whisper / mlx-whisper auto-pick)
+- [x] オプションの話者分離 (pyannote.audio Community-1 / 匿名ラベル)
 - [x] 文字起こし → packed.md (LLM 用構造化)
 - [x] SKILL.md による Claude Code agent への生成委譲
 - [x] X スレ / Threads (Meta) / note 記事の生成ルール (in SKILL.md)
@@ -139,7 +140,6 @@ By v1.0 we'll commit to a final name. The current `yt-kotoba` may evolve into so
 
 - Frame extraction for content assets (analysis frames, contact sheets and
   picture-change rhythm already ship via `add --with-frames`)
-- Speaker diarization (pyannote.audio) — 対談動画・会議用
 - Local web dashboard for editing drafts (no auth, local-only)
 - Cloudflare Workers cloud version (only if scale demands)
 

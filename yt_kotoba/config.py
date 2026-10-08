@@ -30,6 +30,11 @@ def get_whisper_model() -> str:
     return os.environ.get("WHISPER_MODEL", "large-v3").strip()
 
 
+def get_whisper_backend() -> str:
+    """Return transcription backend: auto, mlx, or faster."""
+    return os.environ.get("WHISPER_BACKEND", "auto").strip().lower()
+
+
 def get_whisper_compute_type() -> str:
     return os.environ.get("WHISPER_COMPUTE_TYPE", "float16").strip()
 

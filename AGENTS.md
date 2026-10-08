@@ -29,6 +29,9 @@ environment.
 - Output filenames stay deterministic by video ID:
   `<id>.audio.m4a`, `<id>.transcript.json`, `<id>.packed.md`, and agent-written
   derivatives such as `<id>.x_thread.md`.
+- Speaker diarization remains opt-in, local, and anonymous. Never switch to a
+  paid/cloud pyannote pipeline, commit Hugging Face tokens, or present
+  `SPEAKER_00`-style labels as verified real-world identities.
 - Keep Python support aligned with `pyproject.toml` (`>=3.9`) unless the project
   explicitly decides to raise it.
 - Keep the project Japanese-first, but do not hard-code assumptions that block

@@ -42,37 +42,49 @@ def pack_transcript(
         offset = int(seg["offset"])
         duration = int(seg["duration"])
         end = offset + duration
+        speaker = seg.get("speaker")
 
         start_new = False
         if current is None:
             start_new = True
         else:
             gap = offset - current["end"]
-            if gap >= silence_threshold_ms:
+            if speaker != current.get("speaker"):
+                start_new = True
+            elif gap >= silence_threshold_ms:
                 start_new = True
             elif len(current["text"]) >= block_target_chars:
                 start_new = True
 
         if start_new:
-            current = {"start": offset, "end": end, "text": text}
+            current = {"start": offset, "end": end, "text": text, "speaker": speaker}
             blocks.append(current)
         else:
             current["text"] += " " + text
             current["end"] = end
 
     lang = transcript.get("lang", "ja")
+    speakers = sorted(
+        {
+            str(block["speaker"])
+            for block in blocks
+            if block.get("speaker")
+        }
+    )
     lines = [
         f"# Transcript ({lang})",
         "",
         f"- Total blocks: {len(blocks)}",
         f"- Total duration: ~{_format_ts(blocks[-1]['end'])}",
-        "",
-        "---",
-        "",
     ]
+    if speakers:
+        lines.append(f"- Speakers: {', '.join(speakers)}")
+    lines += ["", "---", ""]
+
     for b in blocks:
         ts = _format_ts(b["start"])
-        lines.append(f"## [{ts}]")
+        speaker_suffix = f" {b['speaker']}" if b.get("speaker") else ""
+        lines.append(f"## [{ts}]{speaker_suffix}")
         lines.append("")
         lines.append(b["text"])
         lines.append("")

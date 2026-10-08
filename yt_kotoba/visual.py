@@ -6,20 +6,16 @@ picture changes). They are internal reference material; never publish them.
 from __future__ import annotations
 
 import json
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
+
+from .tools import find_ffmpeg, find_yt_dlp
 
 # HLS (m3u8) formats can be 10x slower to fetch than DASH over https, so prefer https.
 VIDEO_FORMAT = "bv*[height<={h}][protocol=https]+ba[ext=m4a]/bv*[height<={h}]+ba/b"
 THRESHOLDS = (8, 15, 25)
 DIFF_W, DIFF_H, DIFF_FPS = 64, 36, 2
-
-
-def _require(tool: str) -> None:
-    if shutil.which(tool) is None:
-        raise RuntimeError(f"{tool} is required but was not found in PATH.")
 
 
 def download_video(
@@ -30,14 +26,16 @@ def download_video(
     cookies_file: str | None = None,
 ) -> Path:
     """Download video.mp4 into out_dir (skips if present)."""
-    _require("yt-dlp")
     out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / "video.mp4"
     if out.exists() and out.stat().st_size > 0:
         return out
-    cmd = ["yt-dlp", "--no-playlist", "--quiet", "--no-warnings", "-N", "8",
+    cmd = [find_yt_dlp(), "--no-playlist", "--quiet", "--no-warnings", "-N", "8",
            "-f", VIDEO_FORMAT.format(h=max_height), "--merge-output-format", "mp4",
            "-o", str(out_dir / "video.%(ext)s")]
+    ffmpeg = find_ffmpeg(required=False)
+    if ffmpeg is not None:
+        cmd += ["--ffmpeg-location", ffmpeg]
     if cookies_browser:
         cmd += ["--cookies-from-browser", cookies_browser]
     elif cookies_file:
@@ -48,12 +46,11 @@ def download_video(
 
 def sample_frames(video: Path, out_dir: Path, every_sec: int = 10) -> dict[str, str]:
     """Write frames/every_<n>s/t%04d.jpg and frames/sheets/every_<n>s_sheet%02d.jpg (5x4 tiles)."""
-    _require("ffmpeg")
     frames = out_dir / "frames" / f"every_{every_sec}s"
     sheets = out_dir / "frames" / "sheets"
     frames.mkdir(parents=True, exist_ok=True)
     sheets.mkdir(parents=True, exist_ok=True)
-    base = ["ffmpeg", "-loglevel", "error", "-y", "-i", str(video)]
+    base = [find_ffmpeg(), "-loglevel", "error", "-y", "-i", str(video)]
     subprocess.run(base + ["-vf", f"fps=1/{every_sec},scale=1280:-2", "-q:v", "3",
                            str(frames / "t%04d.jpg")], check=True)
     subprocess.run(base + ["-vf", f"fps=1/{every_sec},scale=384:-2,tile=5x4", "-q:v", "4",
@@ -95,9 +92,8 @@ def measure_rhythm(video: Path, out_dir: Path) -> dict[str, Any]:
     This is a rough proxy, not a cut list: a speech-bubble swap on the same
     drawing can stay under the lower thresholds, so report a range.
     """
-    _require("ffmpeg")
     raw = subprocess.run(
-        ["ffmpeg", "-loglevel", "error", "-i", str(video),
+        [find_ffmpeg(), "-loglevel", "error", "-i", str(video),
          "-vf", f"fps={DIFF_FPS},scale={DIFF_W}:{DIFF_H},format=gray", "-f", "rawvideo", "-"],
         check=True, capture_output=True,
     ).stdout

@@ -6,14 +6,24 @@ The shape matches insight-boost-13's existing scripts so transcripts are interch
 from __future__ import annotations
 
 import json
+import os
+import functools
 import platform
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import TypedDict
 
-from .config import get_whisper_compute_type, get_whisper_device, get_whisper_model
+from .config import (
+    get_whisper_backend,
+    get_whisper_compute_type,
+    get_whisper_device,
+    get_whisper_model,
+)
 
-USE_MLX = platform.system() == "Darwin" and platform.processor() == "arm"
+USE_MLX = platform.system() == "Darwin" and platform.machine() in {"arm64", "aarch64"}
 
 
 class Segment(TypedDict):
@@ -28,15 +38,61 @@ class TranscriptResult(TypedDict):
     lang: str
 
 
+def _ensure_ffmpeg_in_path() -> str | None:
+    """Return a temp dir added to PATH when ffmpeg is not found natively."""
+    if shutil.which("ffmpeg"):
+        return None
+    try:
+        import imageio_ffmpeg
+        exe = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return None
+    tmp = tempfile.mkdtemp(prefix="yt-kotoba-ffmpeg-")
+    link = os.path.join(tmp, "ffmpeg")
+    os.symlink(exe, link)
+    os.environ["PATH"] = tmp + os.pathsep + os.environ.get("PATH", "")
+    return tmp
+
+
+@functools.lru_cache(maxsize=1)
+def _mlx_initialization_error() -> str | None:
+    """Return an error string when mlx-whisper cannot initialize safely.
+
+    Checked once per process: repair.py re-transcribes several short spans.
+    """
+    proc = subprocess.run(
+        [sys.executable, "-c", "import mlx_whisper"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if proc.returncode == 0:
+        return None
+    stderr = proc.stderr.strip()
+    if not stderr:
+        return f"mlx-whisper exited with status {proc.returncode}"
+    return stderr.splitlines()[0]
+
+
 def _transcribe_mlx(
     audio_path: Path, lang: str, condition_on_previous_text: bool = True
 ) -> TranscriptResult:
+    init_error = _mlx_initialization_error()
+    if init_error is not None:
+        raise RuntimeError(
+            "mlx-whisper failed to initialize Metal. "
+            "Set WHISPER_BACKEND=faster to use faster-whisper instead. "
+            f"Details: {init_error}"
+        )
+
     try:
         import mlx_whisper
     except ImportError as e:
         raise RuntimeError(
             "mlx-whisper not installed. Run: pip install -e '.[mlx]'"
         ) from e
+
+    _ensure_ffmpeg_in_path()
 
     repo_map = {
         "large-v3": "mlx-community/whisper-large-v3-mlx",
@@ -120,14 +176,27 @@ def _transcribe_faster(
 def transcribe_audio(
     audio_path: Path, lang: str = "ja", condition_on_previous_text: bool = True
 ) -> TranscriptResult:
-    """Transcribe an audio file, picking backend by platform.
+    """Transcribe an audio file, picking backend by WHISPER_BACKEND and platform.
 
     `condition_on_previous_text=False` stops Whisper from feeding its previous
     output back as a prompt. It is slower to settle on style but avoids the
     repeat loops that long recordings sometimes fall into (see repair.py).
     """
-    if USE_MLX:
+    backend = get_whisper_backend()
+    if backend not in {"auto", "mlx", "faster"}:
+        raise RuntimeError("WHISPER_BACKEND must be one of: auto, mlx, faster")
+
+    if backend == "mlx":
         return _transcribe_mlx(audio_path, lang, condition_on_previous_text)
+    if backend == "auto" and USE_MLX:
+        init_error = _mlx_initialization_error()
+        if init_error is None:
+            return _transcribe_mlx(audio_path, lang, condition_on_previous_text)
+        print(
+            "[yt-kotoba] mlx-whisper unavailable; falling back to faster-whisper. "
+            f"Details: {init_error}",
+            file=sys.stderr,
+        )
     return _transcribe_faster(audio_path, lang, condition_on_previous_text)
 
 

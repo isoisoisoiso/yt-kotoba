@@ -1,6 +1,6 @@
 # yt-kotoba *(working title — name may change before v1.0)*
 
-> YouTube 動画を **X スレ・Threads・note 記事・ブログ**へ展開する OSS。日本語ファースト。**外部 API キー一切不要**（Whisper はローカル / 生成は Claude Code 等のエージェントに委譲）。
+> YouTube 動画を **X スレ・Threads・note 記事・ブログ**へ展開する OSS。日本語ファースト。通常フローは**外部 API キー不要**（Whisper はローカル / 生成は Claude Code 等のエージェントに委譲）。
 
 > ⚠️ **Status: v0.1 (early preview)** — まだフィードバック受付中。名前・スコープが変わる可能性あり。本番運用前に [ROADMAP.md](./ROADMAP.md) を確認してください。
 
@@ -21,6 +21,7 @@ YouTube URL ──> 音声DL ──> 文字起こし ──> 構造化 ──> [
 - **動画 → 構造化された LLM 用転写** (`packed.md`) を 1 コマンドで
 - **agent-driven 生成**: Claude Code・Cursor 等が SKILL.md を読んで X スレ・Threads・note 記事を直接書く
 - **完全ローカル文字起こし**: faster-whisper (CUDA) / mlx-whisper (M1/M2/M3) 自動選択
+- **オプションの話者分離**: pyannote.audio で `SPEAKER_00` 等の匿名ラベルを付与
 - **ブランドボイス**: `voice.yaml` で口調・禁則語・ハッシュタグをカスタム
 - **キャッシュ**: 同じ動画は 1 度しか処理しない
 
@@ -31,6 +32,9 @@ YouTube URL ──> 音声DL ──> 文字起こし ──> 構造化 ──> [
 - video-use (browser-use チーム) と同じ哲学
 - ユーザーは Claude Code 等の上で skill を起動 → エージェント自身が packed.md を読んで生成
 - これにより: ① API 課金ゼロ ② 任意の LLM で動く ③ プロンプト改造が SKILL.md 編集だけで済む
+
+話者分離を使う場合だけ、初回のオープンモデル取得に無料の Hugging Face
+アクセストークンが必要です。推論自体はローカルで実行され、有料 API は使いません。
 
 スタンドアロンの CLI で生成まで自動化したい場合は、`packed.md` を Ollama 等に流し込むラッパを自作してください（README 末尾参照）。
 
@@ -49,6 +53,10 @@ cd yt-kotoba
 # プラットフォーム別に依存をインストール
 pip install -e ".[cuda]"   # NVIDIA GPU (Windows / Linux)
 pip install -e ".[mlx]"    # Apple Silicon (macOS)
+
+# 話者分離も使う場合（Python 3.10 以上）
+pip install -e ".[mlx,diarization]"   # Apple Silicon
+pip install -e ".[cuda,diarization]"  # NVIDIA GPU
 ```
 
 `.env` は**作らなくて OK**（オプション設定のみ。`.env.example` 参照）。
@@ -128,6 +136,40 @@ sources/youtube/XXXX/
 - **`--drop-video`**: フレームを取り終えたら `video.mp4` を消します。構成分析に必要なのは文字起こし・コメント・一覧画像で、1 本あたり数 MB です。容量の大きいマシンで取得し、軽い成果物だけを分析用マシンへ運ぶ使い方を想定しています。
 - 取得物はすべて第三者の素材です。公開・再配布しないでください（manifest の `distribution` を参照）。
 
+### 話者分離（オプション）
+
+`pyannote.audio` の Community-1 モデルを使い、Whisper の各区間に匿名の話者ラベルを付けます。
+これは「誰と誰が話しているか」を分ける機能で、人物の実名までは判定しません。
+
+初回のみ Hugging Face 側の設定が必要です。
+
+1. [Community-1 モデルページ](https://huggingface.co/pyannote/speaker-diarization-community-1)を開き、利用条件に同意
+2. [Hugging Faceのトークン設定](https://huggingface.co/settings/tokens)で Read 権限のトークンを作成
+3. リポジトリへトークンを書かず、ローカルの認証ストアへ保存
+
+```bash
+hf auth login
+```
+
+設定後、`--diarize` を付けて実行します。人数が分かっていれば
+`--num-speakers` を指定すると精度が安定しやすくなります。
+
+```bash
+yt-kotoba run "https://www.youtube.com/watch?v=XXXX" \
+  --out ./output \
+  --diarize \
+  --num-speakers 2
+
+# 人数の範囲だけ分かる場合
+yt-kotoba transcribe ./output/XXXX.audio.m4a \
+  --diarize \
+  --min-speakers 2 \
+  --max-speakers 5
+```
+
+初回はモデルをダウンロードするためネット接続が必要です。取得後の話者分離はローカルで
+実行されます。pyannote.audio の任意テレメトリは、このプロジェクトではデフォルト無効です。
+
 ### 解析 QA（内部確認用）
 
 `qa` は `video.mp4` と `telops.raw.json` / `visual_events.json` などの解析ファイルを照合し、確認用フレームとレポートを `<source_dir>/qa/` に出します。これは元動画の派生確認物なので、公開・配布用ではありません。実行後は別プロダクトが読む入口として `source_pack_manifest.json` も更新します。
@@ -163,7 +205,7 @@ yt-kotoba manifest ./projects/soccer_news_ryusei/sources/youtube/hzlTJnEZ3xw
 ```
 output/
 ├── XXXX.audio.m4a        # ダウンロードした音声 (キャッシュ)
-├── XXXX.transcript.json  # Whisper 出力 (キャッシュ)
+├── XXXX.transcript.json  # Whisper 出力。--diarize 時は匿名話者ラベル付き (キャッシュ)
 └── XXXX.packed.md        # LLM 用の構造化済み転写 (← ここまで CLI が生成)
 
 # 以下はエージェント（Claude Code 等）が SKILL.md を読んで書き出す

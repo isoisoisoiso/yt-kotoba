@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .tools import find_yt_dlp
+
 # Only these fields are kept in metadata.json; the raw yt-dlp dump also holds
 # format URLs and HTTP headers that are useless for analysis and noisy to share.
 METADATA_FIELDS = [
@@ -32,17 +34,12 @@ def _now() -> str:
 
 
 def _yt_dlp(args: list[str], cookies_browser: str | None, cookies_file: str | None) -> None:
-    cmd = ["yt-dlp", "--no-playlist", "--quiet", "--no-warnings"]
+    cmd = [find_yt_dlp(), "--no-playlist", "--quiet", "--no-warnings"]
     if cookies_browser:
         cmd += ["--cookies-from-browser", cookies_browser]
     elif cookies_file:
         cmd += ["--cookies", cookies_file]
-    try:
-        subprocess.run(cmd + args, check=True)
-    except FileNotFoundError as e:
-        raise RuntimeError(
-            "yt-dlp not found. Install with: brew install yt-dlp / scoop install yt-dlp"
-        ) from e
+    subprocess.run(cmd + args, check=True)
 
 
 def fetch_metadata(
